@@ -3,3 +3,6 @@ seaborn
 matplotlib
 plotly
 plotly.express
+zipfile
+io
+numpy as np
