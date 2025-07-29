@@ -5,4 +5,4 @@ plotly
 plotly.express
 zipfile
 io
-numpy as np
+numpy
