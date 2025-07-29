@@ -2,13 +2,17 @@ import streamlit as st
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import zipfile
+import io
 
 st.set_page_config(page_title="Wine Market Dashboard", layout="wide")
 
-# Load the cleaned dataset
+# Load the cleaned dataset from a zip file
 @st.cache_data
 def load_data():
-    return pd.read_csv('./cleaned_wine_data.csv')  # Replace with df_wine_eda if already loaded
+    with zipfile.ZipFile("./df_wine_eda.zip") as z:
+        with z.open("df_wine_eda.csv") as f:
+            return pd.read_csv(f)
 
 df = load_data()
 
@@ -21,47 +25,71 @@ selected_country = st.sidebar.multiselect("Country", df['Country'].unique(), def
 selected_grape = st.sidebar.multiselect("Grape Variety", df['Grape'].unique())
 selected_region = st.sidebar.multiselect("Region", df['Region'].unique())
 
-filtered_df = df[
-    df['Country'].isin(selected_country)
-    & (df['Grape'].isin(selected_grape) if selected_grape else True)
-    & (df['Region'].isin(selected_region) if selected_region else True)
-]
+# Focus mode toggle
+focus_mode = st.sidebar.checkbox("Focus on Bourgogne - Pinot Noir wines only")
 
-st.subheader("📊 Filtered Data Overview")
-st.dataframe(filtered_df.head(50))
+if focus_mode:
+    filtered_df = df[
+        (df['Country'] == 'France') &
+        (df['Region'].str.contains('Burgundy', case=False, na=False)) &
+        (df['Grape'].str.contains('Pinot Noir', case=False, na=False))
+    ]
+else:
+    filtered_df = df[
+        df['Country'].isin(selected_country)
+        & (df['Grape'].isin(selected_grape) if selected_grape else True)
+        & (df['Region'].isin(selected_region) if selected_region else True)
+    ]
 
-# Top countries
-st.subheader("🌍 Top Wine-Producing Countries")
-top_countries = df['Country'].value_counts().head(10)
-fig1, ax1 = plt.subplots()
-sns.barplot(x=top_countries.values, y=top_countries.index, palette='Purples_r', ax=ax1)
-ax1.set_title("Top 10 Wine-Producing Countries")
-st.pyplot(fig1)
+# Tabs for organized dashboard
+overview_tab, price_tab, scatter_tab = st.tabs(["🌍 Market Overview", "💵 Price & Ratings", "📈 Scatter View"])
 
-# Price Distribution
-st.subheader("💵 Price Distribution (log scale)")
-fig2, ax2 = plt.subplots()
-sns.histplot(filtered_df['Price_USD'], bins=50, kde=True, color='darkred', ax=ax2)
-ax2.set_xscale('log')
-ax2.set_xlabel("Price (USD)")
-st.pyplot(fig2)
+with overview_tab:
+    st.subheader("📊 Filtered Data Overview")
+    st.dataframe(filtered_df.head(50))
 
-# Rating Distribution
-st.subheader("⭐ Rating Distribution")
-fig3, ax3 = plt.subplots()
-sns.histplot(filtered_df['Rating'], bins=20, kde=True, color='darkgreen', ax=ax3)
-ax3.set_xlabel("Wine Rating (Points)")
-st.pyplot(fig3)
+    st.subheader("🌍 Top Wine-Producing Countries")
+    top_countries = df['Country'].value_counts().head(10)
+    fig1, ax1 = plt.subplots()
+    sns.barplot(x=top_countries.values, y=top_countries.index, palette='Purples_r', ax=ax1)
+    ax1.set_title("Top 10 Wine-Producing Countries")
+    st.pyplot(fig1)
 
-# Scatter: Price vs Rating
-st.subheader("📈 Rating vs Price")
-fig4, ax4 = plt.subplots()
-sns.scatterplot(data=filtered_df, x='Rating', y='Price_USD', alpha=0.5, ax=ax4)
-ax4.set_yscale('log')
-ax4.set_title("Price vs Rating")
-st.pyplot(fig4)
+with price_tab:
+    st.subheader("💵 Price Distribution (log scale)")
+    fig2, ax2 = plt.subplots()
+    sns.histplot(filtered_df['Price_USD'], bins=50, kde=True, color='darkred', ax=ax2)
+    ax2.set_xscale('log')
+    ax2.set_xlabel("Price (USD)")
+    st.pyplot(fig2)
 
-# Download filtered data
+    st.subheader("⭐ Rating Distribution")
+    fig3, ax3 = plt.subplots()
+    sns.histplot(filtered_df['Rating'], bins=20, kde=True, color='darkgreen', ax=ax3)
+    ax3.set_xlabel("Wine Rating (Points)")
+    st.pyplot(fig3)
+
+    st.subheader("📈 Price Summary (Quartiles)")
+    st.write(filtered_df['Price_USD'].describe(percentiles=[.25, .5, .75, .9]))
+
+with scatter_tab:
+    st.subheader("📈 Rating vs Price")
+    fig4, ax4 = plt.subplots()
+    sns.scatterplot(data=filtered_df, x='Rating', y='Price_USD', alpha=0.5, ax=ax4)
+    ax4.set_yscale('log')
+    ax4.set_title("Price vs Rating")
+    st.pyplot(fig4)
+
+# Download filtered data as ZIP
 st.subheader("📥 Export Filtered Data")
-st.download_button("Download CSV", filtered_df.to_csv(index=False), "filtered_wines.csv", "text/csv")
+@st.cache_data
+def zip_filtered_data(df_to_zip):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        csv_bytes = df_to_zip.to_csv(index=False).encode('utf-8')
+        zf.writestr("filtered_wines.csv", csv_bytes)
+    buffer.seek(0)
+    return buffer
 
+zip_buffer = zip_filtered_data(filtered_df)
+st.download_button("Download ZIP", zip_buffer, file_name="filtered_wines.zip", mime="application/zip")
