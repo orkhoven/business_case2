@@ -5,7 +5,7 @@ import zipfile
 import io
 import numpy as np
 
-st.set_page_config(page_title="Wine Market Dashboard", layout="wide")
+st.set_page_config(page_title="A demain", layout="wide")
 
 # Load data from zip
 @st.cache_data
