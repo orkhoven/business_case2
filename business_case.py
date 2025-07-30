@@ -12,8 +12,10 @@ st.set_page_config(page_title="Wine Market Dashboard", layout="wide")
 def load_data():
     with zipfile.ZipFile("./df_wine_eda.zip") as z:
         with z.open("df_wine_eda.csv") as f:
-            return pd.read_csv(f)
-
+            df = pd.read_csv(f)
+            if 'Unnamed: 0' in df.columns:
+                df = df.drop(columns=['Unnamed: 0'])
+            return df
 df = load_data()
 
 # Sidebar filters
